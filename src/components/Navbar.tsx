@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Trophy, Calendar, Users, Shield, Search, Menu, X, LogOut, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
@@ -7,6 +7,7 @@ import { cn } from '../lib/utils';
 export default function Navbar() {
   const [isOpen, setIsOpen] = React.useState(false);
   const { user, role, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const navItems = [
     { name: 'Seasons', href: '/seasons', icon: Calendar },
@@ -67,7 +68,10 @@ export default function Navbar() {
                   <span className="text-xs text-gray-300 font-medium">{user.email}</span>
                 </div>
                 <button
-                  onClick={() => signOut()}
+                  onClick={() => {
+                    signOut();
+                    navigate('/login');
+                  }}
                   className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
                   title="Sign Out"
                 >
@@ -127,6 +131,7 @@ export default function Navbar() {
                   <button
                     onClick={() => {
                       signOut();
+                      navigate('/login');
                       setIsOpen(false);
                     }}
                     className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"
