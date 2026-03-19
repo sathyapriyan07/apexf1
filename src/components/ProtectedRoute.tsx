@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -9,7 +10,10 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, adminOnly = false }: ProtectedRouteProps) {
-  const { user, role, loading } = useAuth();
+  const { user, role, loading, refreshRole } = useAuth();
+  const projectRef =
+    ((supabase as any)?.supabaseUrl as string | undefined)?.match(/^https:\/\/([a-z0-9-]+)\.supabase\.co/i)?.[1] ??
+    'unknown';
 
   if (loading) {
     return (
@@ -34,6 +38,21 @@ export default function ProtectedRoute({ children, adminOnly = false }: Protecte
           You do not have administrative privileges to access this section. 
           Please contact the system administrator if you believe this is an error.
         </p>
+        <div className="text-xs text-gray-500 mb-6">
+          Current role: <span className="text-gray-300 font-mono">{role ?? 'unknown'}</span>
+          <div className="mt-2">
+            User id: <span className="text-gray-300 font-mono">{user?.id ?? 'none'}</span>
+          </div>
+          <div className="mt-1">
+            Project ref: <span className="text-gray-300 font-mono">{projectRef}</span>
+          </div>
+        </div>
+        <button
+          onClick={() => refreshRole()}
+          className="mb-3 bg-zinc-800 text-white px-8 py-3 rounded-xl font-bold hover:bg-zinc-700 transition-all"
+        >
+          Retry Role Check
+        </button>
         <button 
           onClick={() => window.location.href = '/'}
           className="bg-red-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-red-700 transition-all"

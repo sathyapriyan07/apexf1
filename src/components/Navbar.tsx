@@ -68,8 +68,8 @@ export default function Navbar() {
                   <span className="text-xs text-gray-300 font-medium">{user.email}</span>
                 </div>
                 <button
-                  onClick={() => {
-                    signOut();
+                  onClick={async () => {
+                    await signOut();
                     navigate('/login');
                   }}
                   className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
@@ -129,8 +129,8 @@ export default function Navbar() {
                     Logged in as: <span className="text-white">{user.email}</span>
                   </div>
                   <button
-                    onClick={() => {
-                      signOut();
+                    onClick={async () => {
+                      await signOut();
                       navigate('/login');
                       setIsOpen(false);
                     }}

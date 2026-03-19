@@ -7,6 +7,7 @@ interface AuthContextType {
   role: string | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  refreshRole: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,8 +33,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       });
 
-    // Safety timeout: ensure loading ends even if network hangs
-    const timeout = setTimeout(() => setLoading(false), 5000);
+    // Safety timeout: ensure loading ends even if network hangs.
+    // If we timed out, default to 'user' (never auto-admin).
+    const timeout = setTimeout(() => {
+      setRole(prev => prev ?? 'user');
+      setLoading(false);
+    }, 5000);
 
     // Listen for changes on auth state (logged in, signed out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -54,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchRole = async (userId: string) => {
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
@@ -87,12 +93,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshRole = async () => {
+    const { data } = await supabase.auth.getSession();
+    const uid = data?.session?.user?.id;
+    if (uid) await fetchRole(uid);
+  };
+
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      // Try global signout first; fall back to local so UI/session still clears offline.
+      try {
+        await supabase.auth.signOut({ scope: 'global' } as any);
+      } catch {
+        await supabase.auth.signOut({ scope: 'local' } as any);
+      }
+    } finally {
+      try {
+        (supabase.auth as any)?.stopAutoRefresh?.();
+      } catch {}
+
+      // Best-effort: clear any persisted Supabase auth tokens for this project.
+      try {
+        const url = (supabase as any)?.supabaseUrl as string | undefined;
+        const ref = url?.match(/^https:\/\/([a-z0-9-]+)\.supabase\.co/i)?.[1];
+        if (ref && typeof localStorage !== 'undefined') {
+          const prefix = `sb-${ref}-`;
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (!key) continue;
+            if (key.startsWith(prefix)) localStorage.removeItem(key);
+          }
+        }
+      } catch {}
+
+      // Ensure local state clears even if onAuthStateChange is delayed.
+      setUser(null);
+      setRole(null);
+      setLoading(false);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, signOut }}>
+    <AuthContext.Provider value={{ user, role, loading, signOut, refreshRole }}>
       {children}
     </AuthContext.Provider>
   );
