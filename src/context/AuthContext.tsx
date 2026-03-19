@@ -60,7 +60,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', userId)
         .single();
       
-      if (error) throw error;
+      if (error) {
+        // If profile row doesn't exist yet (common for existing users before trigger/policies),
+        // create a safe default profile and retry.
+        const missingRow =
+          typeof (error as any)?.message === 'string' &&
+          ((error as any).message.includes('0 rows') || (error as any).message.includes('No rows'));
+
+        if (missingRow) {
+          const { error: insertError } = await supabase.from('profiles').insert({ id: userId, role: 'user' });
+          if (!insertError) {
+            setRole('user');
+            return;
+          }
+        }
+
+        throw error;
+      }
+
       setRole(data?.role || 'user');
     } catch (err) {
       console.error('Error fetching role:', err);

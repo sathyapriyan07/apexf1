@@ -166,9 +166,12 @@ DROP POLICY IF EXISTS "Admin write access" ON public.results;
 
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 
 -- Public read access
 CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT
+WITH CHECK (auth.uid() = id AND role = 'user');
 CREATE POLICY "Public read access" ON public.drivers FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON public.constructors FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON public.seasons FOR SELECT USING (true);
@@ -176,31 +179,57 @@ CREATE POLICY "Public read access" ON public.races FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON public.results FOR SELECT USING (true);
 
 -- Admin write access
-CREATE POLICY "Admin write access" ON public.drivers FOR ALL USING (
+CREATE POLICY "Admin write access" ON public.drivers FOR ALL
+USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+)
+WITH CHECK (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );
-CREATE POLICY "Admin write access" ON public.constructors FOR ALL USING (
+CREATE POLICY "Admin write access" ON public.constructors FOR ALL
+USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+)
+WITH CHECK (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );
-CREATE POLICY "Admin write access" ON public.seasons FOR ALL USING (
+CREATE POLICY "Admin write access" ON public.seasons FOR ALL
+USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+)
+WITH CHECK (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );
-CREATE POLICY "Admin write access" ON public.races FOR ALL USING (
+CREATE POLICY "Admin write access" ON public.races FOR ALL
+USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+)
+WITH CHECK (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );
-CREATE POLICY "Admin write access" ON public.results FOR ALL USING (
+CREATE POLICY "Admin write access" ON public.results FOR ALL
+USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+)
+WITH CHECK (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
 -- Profile update policy (users can update their own profile, but not role)
-CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE
+USING (auth.uid() = id)
+WITH CHECK (
+  auth.uid() = id
+  AND role = (SELECT p.role FROM public.profiles p WHERE p.id = auth.uid())
+);
 
 -- Function to handle new user profile creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, role)
-  VALUES (new.id, 'user');
+  VALUES (new.id, 'user')
+  ON CONFLICT (id) DO NOTHING;
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
@@ -215,6 +244,7 @@ CREATE TRIGGER on_auth_user_created
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT SELECT ON TABLE public.drivers, public.constructors, public.seasons, public.races, public.results TO anon, authenticated;
 GRANT SELECT ON TABLE public.profiles TO authenticated;
+GRANT INSERT ON TABLE public.profiles TO authenticated;
 GRANT UPDATE ON TABLE public.profiles TO authenticated;
 GRANT INSERT, UPDATE, DELETE ON TABLE public.drivers, public.constructors, public.seasons, public.races, public.results TO authenticated;
 GRANT SELECT ON TABLE public.driver_standings, public.all_time_records, public.driver_career_span, public.driver_latest_team, public.driver_cards TO anon, authenticated;
