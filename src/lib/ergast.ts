@@ -44,7 +44,14 @@ async function apiFetch(path: string, options: ApiFetchOptions = {}) {
       signal,
       headers: { accept: 'application/json' },
     });
-    if (proxied.ok) return proxied.json();
+    if (proxied.ok) {
+      const contentType = proxied.headers.get('content-type') || '';
+      const text = await proxied.text();
+      if (!contentType.includes('application/json')) {
+        throw new Error(`Proxy returned non-JSON (${contentType || 'unknown content-type'})`);
+      }
+      return JSON.parse(text);
+    }
     lastError = new Error(`Proxy HTTP ${proxied.status} ${proxied.statusText}`);
   } catch (err) {
     if ((err as any)?.name === 'AbortError') throw err;
