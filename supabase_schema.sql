@@ -165,9 +165,10 @@ DROP POLICY IF EXISTS "Admin write access" ON public.races;
 DROP POLICY IF EXISTS "Admin write access" ON public.results;
 
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
 
 -- Public read access
-CREATE POLICY "Public read access" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Public read access" ON public.drivers FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON public.constructors FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON public.seasons FOR SELECT USING (true);
@@ -202,10 +203,18 @@ BEGIN
   VALUES (new.id, 'user');
   RETURN new;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Trigger for new user profile
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- Grants (RLS still enforced)
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT ON TABLE public.drivers, public.constructors, public.seasons, public.races, public.results TO anon, authenticated;
+GRANT SELECT ON TABLE public.profiles TO authenticated;
+GRANT UPDATE ON TABLE public.profiles TO authenticated;
+GRANT INSERT, UPDATE, DELETE ON TABLE public.drivers, public.constructors, public.seasons, public.races, public.results TO authenticated;
+GRANT SELECT ON TABLE public.driver_standings, public.all_time_records, public.driver_career_span, public.driver_latest_team, public.driver_cards TO anon, authenticated;

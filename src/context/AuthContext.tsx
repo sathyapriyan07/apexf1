@@ -32,11 +32,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       });
 
-    // Safety timeout: Ensure loading is set to false after 5 seconds no matter what
-    const timeout = setTimeout(() => {
-      setRole(prev => prev ?? 'admin');
-      setLoading(false);
-    }, 5000);
+    // Safety timeout: ensure loading ends even if network hangs
+    const timeout = setTimeout(() => setLoading(false), 5000);
 
     // Listen for changes on auth state (logged in, signed out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -64,10 +61,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
       
       if (error) throw error;
-      setRole(data?.role || 'admin');
+      setRole(data?.role || 'user');
     } catch (err) {
       console.error('Error fetching role:', err);
-      setRole('admin');
+      setRole('user');
     } finally {
       setLoading(false);
     }
