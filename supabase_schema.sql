@@ -1,5 +1,81 @@
 -- F1 Archive Database Schema
 
+-- Compatibility migrations (if older schema used UUID ids)
+-- This makes Ergast ids (e.g. "max_verstappen", "red_bull", "2023-1") storable as TEXT.
+-- Drop dependent views first (they'll be recreated below).
+DROP VIEW IF EXISTS public.driver_cards CASCADE;
+DROP VIEW IF EXISTS public.driver_latest_team CASCADE;
+DROP VIEW IF EXISTS public.driver_career_span CASCADE;
+DROP VIEW IF EXISTS public.all_time_records CASCADE;
+DROP VIEW IF EXISTS public.driver_standings CASCADE;
+
+ALTER TABLE IF EXISTS public.results DROP CONSTRAINT IF EXISTS results_race_id_fkey;
+ALTER TABLE IF EXISTS public.results DROP CONSTRAINT IF EXISTS results_driver_id_fkey;
+ALTER TABLE IF EXISTS public.results DROP CONSTRAINT IF EXISTS results_constructor_id_fkey;
+ALTER TABLE IF EXISTS public.seasons DROP CONSTRAINT IF EXISTS seasons_champion_driver_id_fkey;
+ALTER TABLE IF EXISTS public.seasons DROP CONSTRAINT IF EXISTS seasons_champion_constructor_id_fkey;
+
+ALTER TABLE IF EXISTS public.drivers ALTER COLUMN id TYPE TEXT USING id::text;
+ALTER TABLE IF EXISTS public.constructors ALTER COLUMN id TYPE TEXT USING id::text;
+ALTER TABLE IF EXISTS public.races ALTER COLUMN id TYPE TEXT USING id::text;
+ALTER TABLE IF EXISTS public.results ALTER COLUMN race_id TYPE TEXT USING race_id::text;
+ALTER TABLE IF EXISTS public.results ALTER COLUMN driver_id TYPE TEXT USING driver_id::text;
+ALTER TABLE IF EXISTS public.results ALTER COLUMN constructor_id TYPE TEXT USING constructor_id::text;
+ALTER TABLE IF EXISTS public.seasons ALTER COLUMN champion_driver_id TYPE TEXT USING champion_driver_id::text;
+ALTER TABLE IF EXISTS public.seasons ALTER COLUMN champion_constructor_id TYPE TEXT USING champion_constructor_id::text;
+
+DO $$
+BEGIN
+  IF to_regclass('public.seasons') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'seasons_champion_driver_id_fkey' AND conrelid = 'public.seasons'::regclass
+    ) THEN
+      ALTER TABLE public.seasons
+        ADD CONSTRAINT seasons_champion_driver_id_fkey
+        FOREIGN KEY (champion_driver_id) REFERENCES public.drivers(id) ON DELETE SET NULL;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'seasons_champion_constructor_id_fkey' AND conrelid = 'public.seasons'::regclass
+    ) THEN
+      ALTER TABLE public.seasons
+        ADD CONSTRAINT seasons_champion_constructor_id_fkey
+        FOREIGN KEY (champion_constructor_id) REFERENCES public.constructors(id) ON DELETE SET NULL;
+    END IF;
+  END IF;
+
+  IF to_regclass('public.results') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'results_race_id_fkey' AND conrelid = 'public.results'::regclass
+    ) THEN
+      ALTER TABLE public.results
+        ADD CONSTRAINT results_race_id_fkey
+        FOREIGN KEY (race_id) REFERENCES public.races(id) ON DELETE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'results_driver_id_fkey' AND conrelid = 'public.results'::regclass
+    ) THEN
+      ALTER TABLE public.results
+        ADD CONSTRAINT results_driver_id_fkey
+        FOREIGN KEY (driver_id) REFERENCES public.drivers(id) ON DELETE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'results_constructor_id_fkey' AND conrelid = 'public.results'::regclass
+    ) THEN
+      ALTER TABLE public.results
+        ADD CONSTRAINT results_constructor_id_fkey
+        FOREIGN KEY (constructor_id) REFERENCES public.constructors(id) ON DELETE CASCADE;
+    END IF;
+  END IF;
+END $$;
+
 -- 1. Profiles table (for roles)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
@@ -248,3 +324,9 @@ GRANT INSERT ON TABLE public.profiles TO authenticated;
 GRANT UPDATE ON TABLE public.profiles TO authenticated;
 GRANT INSERT, UPDATE, DELETE ON TABLE public.drivers, public.constructors, public.seasons, public.races, public.results TO authenticated;
 GRANT SELECT ON TABLE public.driver_standings, public.all_time_records, public.driver_career_span, public.driver_latest_team, public.driver_cards TO anon, authenticated;
+
+-- Service role (server-side imports / automation)
+GRANT USAGE ON SCHEMA public TO service_role;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO service_role;

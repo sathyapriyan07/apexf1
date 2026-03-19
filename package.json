@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "import:season": "tsx scripts/import-ergast.ts --season",
+    "import:all": "tsx scripts/import-ergast.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

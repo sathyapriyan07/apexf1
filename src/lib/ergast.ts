@@ -302,6 +302,11 @@ export async function fetchSeasonChampions(year: number, options: ApiFetchOption
   };
 }
 
+export async function fetchConstructor(constructorId: string, options: ApiFetchOptions = {}) {
+  const data = await apiFetch(withPagination(`/constructors/${constructorId}.json`, 1000, 0), options);
+  return data?.MRData?.ConstructorTable?.Constructors?.[0] as any;
+}
+
 export async function fetchAllRounds(year: number, options: ApiFetchOptions = {}) {
   const races = await fetchSeason(year, options);
   return races.map(r => parseInt(String(pickField(r, ['round', 'Round']) ?? '0'), 10)).filter(n => n > 0);
@@ -392,6 +397,21 @@ export async function importSeason(
         resync || (!existingSeason?.champion_driver_id && !existingSeason?.champion_constructor_id);
       if (shouldUpdate) {
         const { championDriverId, championConstructorId } = await fetchSeasonChampions(year, { signal });
+
+        // Ensure FK targets exist before setting champion ids
+        try {
+          if (championDriverId) {
+            const d = await fetchDriver(championDriverId, { signal });
+            if (d) await upsertBatch('drivers', [transformDriver(d)], { onConflict: 'id' });
+          }
+          if (championConstructorId) {
+            const c = await fetchConstructor(championConstructorId, { signal });
+            if (c) await upsertBatch('constructors', [transformConstructor(c)], { onConflict: 'id' });
+          }
+        } catch (err: any) {
+          log('error', `Champion refs insert failed: ${err.message}`);
+        }
+
         const patch: any = {};
         if (championDriverId) patch.champion_driver_id = championDriverId;
         if (championConstructorId) patch.champion_constructor_id = championConstructorId;
